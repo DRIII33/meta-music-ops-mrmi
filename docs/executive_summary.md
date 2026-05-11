@@ -1,4 +1,5 @@
-## **Executive Summary:** Meta Music Operations & Rights Metadata Integrity (MRMI) System
+# **Executive Summary:**
+## **Meta Music Operations & Rights Metadata Integrity (MRMI) System**
 
 ---
 
@@ -6,6 +7,7 @@
 
 **Music Operations Lead:** Daniel Rodriguez III
 
+--- 
 
 ### 1. **Strategic Context & Business Challenge**
 
