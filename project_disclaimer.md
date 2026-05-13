@@ -1,0 +1,3 @@
+### **Project Disclaimer**
+
+This project is intended for demonstration and portfolio purposes only. The data, scenarios, and company names (e.g., "Meta Music Operations") are synthetic and do not represent any real-world entities, actual business operations, or confidential information. Any resemblance to real organizations, products, or services is purely coincidental. The insights and recommendations generated are based on simulated data and are not intended for actual business decision-making. The project aims to showcase technical skills in data engineering, analytics, and architectural design.
