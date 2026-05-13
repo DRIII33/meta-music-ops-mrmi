@@ -59,12 +59,21 @@ ORDER BY overall_sla_status DESC, failure_rate_percentage DESC;
 -- Logic: Identify tracks missing spatial metadata despite being flagged for spatial audio.
 -- This helps ensure compliance with Meta's 2026 requirement for spatial metadata (ERN 4.3).
 CREATE OR REPLACE VIEW `driiiportfolio.meta_music.v_spatial_audio_readiness_audit` AS
-SELECT
-    track_id,
-    isrc,
-    title,
-    ddex_version,
-    is_spatial_ready
-FROM `driiiportfolio.meta_music.dim_music_catalog`
-WHERE is_spatial_ready = TRUE
-  AND ddex_version != 'ERN 4.3';
+/**
+ * SANITIZED Optimized Spatial Audio Audit View
+ */
+SELECT 
+    a.issue_id,
+    a.severity AS technical_severity,
+    c.track_id,
+    c.isrc,
+    c.title,
+    c.ddex_version,
+    c.is_spatial_ready,
+    a.detected_timestamp
+FROM `driiiportfolio.meta_music.dim_metadata_anomalies` a
+JOIN `driiiportfolio.meta_music.dim_music_catalog` c 
+  -- TRIM and LOWER handle hidden CSV artifacts
+  ON TRIM(LOWER(a.track_id)) = TRIM(LOWER(c.track_id))
+WHERE a.issue_code = 'SPATIAL_VERSION_MISMATCH'
+ORDER BY a.severity ASC;
