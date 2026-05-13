@@ -4,6 +4,7 @@ import numpy as np
 import uuid
 import random
 from datetime import datetime, timedelta
+import importlib # Import importlib for module reloading
 
 # Import constants from the generated config.py
 # We'll need to add the project's root to the Python path temporarily
@@ -13,6 +14,7 @@ sys.path.insert(0, os.path.abspath('meta-music-ops-mrmi/src/processing'))
 
 try:
     import config
+    importlib.reload(config) # Force reload to ensure latest config is used
 except ModuleNotFoundError:
     print("Error: config.py not found. Ensure it was generated correctly.")
     # Fallback to hardcoded values for demonstration if config fails
@@ -24,6 +26,7 @@ except ModuleNotFoundError:
         DIM_SUPPLIERS_CSV = 'data/dim_suppliers.csv'
         DIM_MUSIC_CATALOG_CSV = 'data/dim_music_catalog.csv'
         FCT_INGESTION_LOG_CSV = 'data/fct_ingestion_log.csv'
+        DIM_METADATA_ANOMALIES_CSV = 'data/dim_metadata_anomalies.csv'
     config = ConfigFallback()
 
 
@@ -116,19 +119,57 @@ class MRMIDataGenerator:
 
         return ingestion_logs_df
 
+    def generate_metadata_anomalies(self, catalog_df):
+        print("Generating dim_metadata_anomalies...")
+        # Identify Anomalies (Spatial Audio Readiness Discrepancies)
+        # Target: Tracks marked ready for spatial but using legacy DDEX versions
+        discrepancy_mask = (
+            (catalog_df['is_spatial_ready'] == True) &
+            (catalog_df['ddex_version'] != 'ERN 4.3')
+        )
+
+        anomalies_raw = catalog_df[discrepancy_mask].copy()
+
+        if anomalies_raw.empty:
+            print("No spatial audio discrepancies found.")
+            return pd.DataFrame() # Return empty DataFrame if no anomalies
+
+        # Apply Severity Logic (P0-P2)
+        # ERN 3.8 = High Risk (P0) due to lack of spatial schema support
+        # ERN 4.2 = Medium Risk (P1) due to incomplete immersive metadata blocks
+        def map_severity(version):
+            if version == 'ERN 3.8':
+                return 'P0 - HIGH'
+            elif version == 'ERN 4.2':
+                return 'P1 - MEDIUM'
+            else:
+                return 'P2 - LOW' # Default to low if other versions are present and not explicitly P0/P1
+
+        anomalies_df = pd.DataFrame({
+            'issue_id': [f"ISS_QC_{uuid.uuid4().hex[:8].upper()}" for _ in range(len(anomalies_raw))],
+            'track_id': anomalies_raw['track_id'].values,
+            'issue_code': 'SPATIAL_VERSION_MISMATCH',
+            'severity': anomalies_raw['ddex_version'].apply(map_severity),
+            'detected_timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        })
+        print(f"Generated {len(anomalies_df)} metadata anomalies.")
+        return anomalies_df
+
+
     def generate_all_datasets(self):
         print("Initiating Music Rights Data Generation...")
 
         suppliers_df = self.generate_suppliers()
         catalog_df = self.generate_music_catalog(suppliers_df)
         ingestion_logs_df = self.generate_ingestion_logs(catalog_df, suppliers_df)
+        dim_metadata_anomalies_df = self.generate_metadata_anomalies(catalog_df) # Generate anomalies here
 
         # Define save paths
         data_dir = os.path.join(BASE_DIR, 'data')
         os.makedirs(data_dir, exist_ok=True)
 
         # Explicitly remove old CSVs to ensure fresh data
-        for filename in [config.DIM_SUPPLIERS_CSV, config.DIM_MUSIC_CATALOG_CSV, config.FCT_INGESTION_LOG_CSV]:
+        for filename in [config.DIM_SUPPLIERS_CSV, config.DIM_MUSIC_CATALOG_CSV, config.FCT_INGESTION_LOG_CSV, config.DIM_METADATA_ANOMALIES_CSV]:
             file_path = os.path.join(data_dir, os.path.basename(filename))
             if os.path.exists(file_path):
                 os.remove(file_path)
@@ -138,11 +179,12 @@ class MRMIDataGenerator:
         suppliers_df.to_csv(os.path.join(data_dir, os.path.basename(config.DIM_SUPPLIERS_CSV)), index=False)
         catalog_df.to_csv(os.path.join(data_dir, os.path.basename(config.DIM_MUSIC_CATALOG_CSV)), index=False)
         ingestion_logs_df.to_csv(os.path.join(data_dir, os.path.basename(config.FCT_INGESTION_LOG_CSV)), index=False)
+        dim_metadata_anomalies_df.to_csv(os.path.join(data_dir, os.path.basename(config.DIM_METADATA_ANOMALIES_CSV)), index=False) # Save anomalies
 
-        print(f"Success: Generated {len(catalog_df)} Tracks, {len(ingestion_logs_df)} Logs, and {len(suppliers_df)} Suppliers.")
+        print(f"Success: Generated {len(catalog_df)} Tracks, {len(ingestion_logs_df)} Logs, {len(suppliers_df)} Suppliers, and {len(dim_metadata_anomalies_df)} Metadata Anomalies.")
         print(f"CSV files saved to: {data_dir}/")
 
-        return suppliers_df, catalog_df, ingestion_logs_df
+        return suppliers_df, catalog_df, ingestion_logs_df, dim_metadata_anomalies_df
 
 
 # Script execution
@@ -161,7 +203,7 @@ if __name__ == '__main__':
 
     # Instantiate and run the generator
     generator = MRMIDataGenerator()
-    suppliers_df, catalog_df, ingestion_logs_df = generator.generate_all_datasets()
+    suppliers_df, catalog_df, ingestion_logs_df, dim_metadata_anomalies_df = generator.generate_all_datasets()
 
     # Remove the temporary path modification
     sys.path.pop(0)
@@ -173,3 +215,5 @@ if __name__ == '__main__':
     print(catalog_df.head())
     print("\n--- Sample of fct_ingestion_log ---")
     print(ingestion_logs_df.head())
+    print("\n--- Sample of dim_metadata_anomalies ---")
+    print(dim_metadata_anomalies_df.head())
